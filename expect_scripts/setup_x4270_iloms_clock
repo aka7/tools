@@ -1,0 +1,55 @@
+#!/usr/bin/expect -f 
+#exp_internal 1
+#package require cmdline
+proc usage {} {
+  puts "Usage: [info script] <host1> <host2> <hostn>"
+  exit 1
+}
+
+set totalargs [llength $argv]
+if { $totalargs == 0 } {
+	usage
+}
+
+# parse command line arguments. 
+
+set host [lrange $argv 0 0 ]
+set timeout -1
+set hosts [concat $argv ]
+
+set systemTime [clock seconds]
+
+set datestamp [clock format $systemTime -format %m%d%H%M%Y]
+
+# get password for ilo 
+stty -echo
+send_user "Please enter root ilo password : "
+expect_user -re "(.*)\n"
+set root_pass $expect_out(1,string)
+send_user "\n"
+stty echo
+
+foreach host $hosts {
+	set systemTime [clock seconds]
+	set timeout 10
+	
+	# login
+	spawn ssh -o StrictHostKeyChecking=no root@$host
+	match_max 100000
+	expect "*?ord:"
+	sleep 3
+	send -- "$root_pass\r"
+	expect "*->"
+	sleep 1
+
+	# set clock manually, turn off ntp first
+	send -- "set /SP/clock usentpserver=disabled\r"
+	send -- "set /SP/clock datetime=$datestamp\r"
+	send -- "set /SP/clock usentpserver=enabled\r"
+	sleep 1
+	
+	send -- "show /SP/clock\r"
+	
+	send -- "exit\r"
+	expect eof
+}

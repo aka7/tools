@@ -1,0 +1,120 @@
+#!/usr/bin/expect -f 
+#exp_internal 1
+#package require cmdline
+# set snmp traps for ilom. worked on oracle x4270
+proc usage {} {
+  puts "Usage: [info script] <host1> <host2> <hostn>"
+  exit 1
+}
+
+set totalargs [llength $argv]
+if { $totalargs == 0 } {
+	usage
+}
+
+ # get password for ilo 
+stty -echo
+send_user "Please enter root ilo password: "
+expect_user -re "(.*)\n"
+set root_pass $expect_out(1,string)
+send_user "\n"
+stty echo
+
+# parse command line arguments. 
+
+set hosts [concat $argv ]
+set timeout 10
+
+# set ip address of snsmp trap hosts
+
+set snmp_trap_host1 10.10.10.10
+set snmp_trap_host2 10.10.10.11
+
+# set community string, ro
+set snmp_community change_this_value
+
+if { $snmp_community == "change_this_value" } {
+  	puts "It appears you haven't set snmp community string"
+  	puts "find line with 'set snmp_community change_this_value'"
+        exit 1
+}
+
+foreach host $hosts {
+	# login
+	spawn ssh -o StrictHostKeyChecking=no root@$host
+	match_max 100000
+	expect "*?ord:"
+	sleep 3
+	send -- "$root_pass\r"
+	expect "*->"
+	sleep 1
+
+	# set info
+
+	send -- "set /SP/services/snmp v2c=enabled\r"
+
+	send -- "delete -script /SP/services/snmp/communities/public\r"
+	send -- "delete -script /SP/services/snmp/communities/private\r"
+	send -- "create /SP/services/snmp/communities/kurv4p1zd4\r"
+	sleep 1
+	
+	send -- "cd /SP/alertmgmt/rules/1\r"
+	send -- "set level=down\r"
+	send -- "set snmp_version=1\r"
+	send -- "set type=ipmipet\r"
+	send -- "set destination=$snmp_trap_host1\r"
+
+	send -- "cd /SP/alertmgmt/rules/2\r"
+	send -- "set level=critical\r"
+	send -- "set type=ipmipet\r"
+	send -- "set destination=$snmp_trap_host1\r"
+	
+	send -- "cd /SP/alertmgmt/rules/3\r"
+	send -- "set level=major\r"
+	send -- "set type=ipmipet\r"
+	send -- "set destination=$snmp_trap_host1\r"
+	
+	send -- "cd /SP/alertmgmt/rules/4\r"
+	send -- "set level=minor\r"
+	send -- "set type=ipmipet\r"
+	send -- "set destination=$snmp_trap_host1\r"
+
+	send -- "cd /SP/alertmgmt/rules/5\r"
+	send -- "set level=down\r"
+	send -- "set type=ipmipet\r"
+	send -- "set destination=$snmp_trap_host2\r"
+
+	send -- "cd /SP/alertmgmt/rules/6\r"
+	send -- "set level=critical\r"
+	send -- "set type=ipmipet\r"
+	send -- "set destination=$snmp_trap_host2\r"
+
+	send -- "cd /SP/alertmgmt/rules/7\r"
+	send -- "set level=major\r"
+	send -- "set type=ipmipet\r"
+	send -- "set destination=$snmp_trap_host2\r"
+
+	send -- "cd /SP/alertmgmt/rules/8\r"
+	send -- "set level=minor\r"
+	send -- "set type=ipmipet\r"
+	send -- "set destination=$snmp_trap_host2\r"
+
+	send -- "cd /SP/alertmgmt/rules/9\r"
+	send -- "set type=snmptrap\r"
+	send -- "set community_or_username=$snmp_community\r"
+	send -- "set destination_port=0\r"
+	send -- "set level=critical\r"
+	send -- "set snmp_version=2c\r"
+	send -- "set destination=$snmp_trap_host2\r"
+
+	send -- "cd /SP/alertmgmt/rules/10\r"
+	send -- "set type=snmptrap\r"
+	send -- "set community_or_username=$snmp_community\r"
+	send -- "set destination_port=0\r"
+	send -- "set level=critical\r"
+	send -- "set snmp_version=2c\r"
+	send -- "set destination=$snmp_trap_host1\r"
+
+	send -- "exit\r"
+	expect eof
+}

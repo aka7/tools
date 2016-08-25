@@ -1,0 +1,46 @@
+#!/usr/bin/expect -f 
+#exp_internal 1
+#package require cmdline
+# expect script to update ilom of oracle x4270
+proc usage {} {
+  puts "Usage: [info script] <host1> <host2> <hostn>"
+  exit 1
+}
+
+set totalargs [llength $argv]
+if { $totalargs == 0 } {
+	usage
+}
+
+set syslog_host1 10.10.10.10
+set syslog_host2 10.10.10.11
+ # get password for ilo 
+stty -echo
+send_user "Please enter root password ilo: "
+expect_user -re "(.*)\n"
+set root_pass $expect_out(1,string)
+send_user "\n"
+stty echo
+
+# parse command line arguments. 
+set hosts [concat $argv ]
+
+set timeout 10
+foreach host $hosts {
+	# login
+	spawn ssh -o StrictHostKeyChecking=no root@$host
+	match_max 100000
+	expect "*?ord:"
+	sleep 3
+	send -- "$root_pass\r"
+	expect "*->"
+	sleep 1
+
+	# set syslog details
+	#x4100 ilo commands
+	send -- "set /SP/clients/syslog destination_ip1=$syslog_host1\r"
+	send -- "set /SP/clients/syslog destination_ip2=$syslog_host2\r"
+	sleep 1
+	send -- "exit\r"
+	expect eof
+}
